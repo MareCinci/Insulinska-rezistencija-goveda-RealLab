@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 st.set_page_config(layout="wide")
-st.title("Uticaj hemolize na indekse insulinske rezistencije (sa 95% CI)")
+st.title("Uticaj hemolize na indekse insulinske rezistencije (95% CI + prag Hb)")
 
 # =========================
 # Regresioni parametri
@@ -82,14 +82,25 @@ for hb in Hb:
 # =========================
 # Funkcija za graf
 # =========================
-def plot_ci(x, y, yL, yH, title, ylabel):
+def plot_ci_with_threshold(x, y, yL, yH, title, ylabel, threshold_pct=0.1):
     fig, ax = plt.subplots(figsize=(6,4))
-    ax.plot(x, y, linewidth=2)
-    ax.fill_between(x, yL, yH, alpha=0.3)
+    ax.plot(x, y, linewidth=2, label="vrednost indeksa")
+    ax.fill_between(x, yL, yH, alpha=0.3, color='orange', label="95% CI")
+
+    # Prag Hb: kada CI > threshold% od indeksa
+    width = np.abs(np.array(yH) - np.array(yL))
+    rel_err = width / np.array(y)
+    above_threshold = np.where(rel_err > threshold_pct)[0]
+    if len(above_threshold) > 0:
+        Hb_threshold = x[above_threshold[0]]
+        ax.axvline(Hb_threshold, color='red', linestyle='--', label=f"Prag nepouzdanosti Hb={Hb_threshold:.2f}")
+        ax.text(Hb_threshold + 0.2, max(y), f"Hb prag\n{Hb_threshold:.2f}", color='red')
+
     ax.set_xlabel("Hemoliza (Hb g/L)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(True)
+    ax.legend()
     st.pyplot(fig)
 
 # =========================
@@ -99,13 +110,13 @@ c1, c2 = st.columns(2)
 c3, c4 = st.columns(2)
 
 with c1:
-    plot_ci(Hb, HOMA, HOMA_L, HOMA_H, "HOMA-IR (95% CI)", "HOMA-IR")
+    plot_ci_with_threshold(Hb, HOMA, HOMA_L, HOMA_H, "HOMA-IR (95% CI)", "HOMA-IR")
 
 with c2:
-    plot_ci(Hb, QUICKI, QUICKI_L, QUICKI_H, "QUICKI (95% CI)", "QUICKI")
+    plot_ci_with_threshold(Hb, QUICKI, QUICKI_L, QUICKI_H, "QUICKI (95% CI)", "QUICKI")
 
 with c3:
-    plot_ci(Hb, RQUICKI, RQUICKI_L, RQUICKI_H, "RQUICKI (95% CI)", "RQUICKI")
+    plot_ci_with_threshold(Hb, RQUICKI, RQUICKI_L, RQUICKI_H, "RQUICKI (95% CI)", "RQUICKI")
 
 with c4:
-    plot_ci(Hb, RQBHB, RQBHB_L, RQBHB_H, "RQUICKI-BHB (95% CI)", "RQUICKI-BHB")
+    plot_ci_with_threshold(Hb, RQBHB, RQBHB_L, RQBHB_H, "RQUICKI-BHB (95% CI)", "RQUICKI-BHB")
