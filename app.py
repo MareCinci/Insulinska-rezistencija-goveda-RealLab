@@ -39,6 +39,9 @@ selected_Hb = st.sidebar.slider("Odaberi Hb (g/L)", 0.0, 10.0, 0.0, 0.1)
 # =========================
 Hb = np.linspace(0, 10, 100)
 
+# Faktor za pojačani uticaj BHB na RQUICKI-BHB
+wBHB = 1.5  # veći od 1 → brže opadanje indeksa
+
 # Liste za rezultate indeksa
 HOMA, HOMA_L, HOMA_H = [], [], []
 QUICKI, QUICKI_L, QUICKI_H = [], [], []
@@ -70,9 +73,9 @@ for hb in Hb:
     RQUICKI_L.append(1 / (np.log(corr_H["INS"]) + np.log(corr_H["GLU"]) + np.log(corr_H["NEFA"])))
     RQUICKI_H.append(1 / (np.log(corr_L["INS"]) + np.log(corr_L["GLU"]) + np.log(corr_L["NEFA"])))
 
-    RQBHB.append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"]) + np.log(corr["BHB"])))
-    RQBHB_L.append(1 / (np.log(corr_H["INS"]) + np.log(corr_H["GLU"]) + np.log(corr_H["NEFA"]) + np.log(corr_H["BHB"])))
-    RQBHB_H.append(1 / (np.log(corr_L["INS"]) + np.log(corr_L["GLU"]) + np.log(corr_L["NEFA"]) + np.log(corr_L["BHB"])))
+    RQBHB.append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"]) + wBHB*np.log(corr["BHB"])))
+    RQBHB_L.append(1 / (np.log(corr_H["INS"]) + np.log(corr_H["GLU"]) + np.log(corr_H["NEFA"]) + wBHB*np.log(corr_H["BHB"])))
+    RQBHB_H.append(1 / (np.log(corr_L["INS"]) + np.log(corr_L["GLU"]) + np.log(corr_L["NEFA"]) + wBHB*np.log(corr_L["BHB"])))
 
 # =========================
 # Funkcija za crtanje grafika sa pragom
@@ -133,7 +136,7 @@ def correct_for_Hb(values, Hb_value):
     HOMA = (corr["INS"] * corr["GLU"]) / 22.5
     QUICKI = 1 / (np.log(corr["INS"]) + np.log(corr["GLU"]))
     RQUICKI = 1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"]))
-    RQBHB = 1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"]) + np.log(corr["BHB"]))
+    RQBHB = 1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"]) + wBHB*np.log(corr["BHB"]))
     return {"HOMA-IR": HOMA, "QUICKI": QUICKI, "RQUICKI": RQUICKI, "RQUICKI-BHB": RQBHB}
 
 # =========================
