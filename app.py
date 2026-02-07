@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 st.set_page_config(layout="wide")
@@ -80,23 +81,23 @@ def plot_index_with_ci_and_threshold(x, y, yL, yH, title, ylabel):
     ax.plot(x, y, linewidth=2, label="Vrednost indeksa")
     ax.fill_between(x, yL, yH, alpha=0.3, color='orange', label="95% CI")
 
-    # Prag nestabilnosti (relativna promena > tolerance)
-    y0 = y[0]  # vrednost indeksa pri Hb=0
+    y0 = y[0]
     rel_change = np.abs(np.array(y) - y0) / y0
     above_tol = np.where(rel_change > tolerance)[0]
 
-    # =========================
-    # Crvena linija uvek u opsegu Hb 0–10 g/L
-    # =========================
     if len(above_tol) > 0:
         Hb_threshold = x[above_tol[0]]
     else:
-        Hb_threshold = x[-1]  # kraj opsega, linija se i dalje crta
+        Hb_threshold = x[-1]
 
     ax.axvline(Hb_threshold, color='red', linestyle='--', label=f"Hb prag nestabilnosti")
-    
-    # Opcionalno: označiti prag na vrhu linije
-    ax.text(Hb_threshold+0.2, max(y), f"Hb prag", color='red')
+
+    # Tekst pored linije sa matematičkim znakom
+    if Hb_threshold > 10:
+        text_label = "Hb > 10 g/L"
+    else:
+        text_label = f"Hb = {Hb_threshold:.2f} g/L"
+    ax.text(Hb_threshold + 0.2, max(y), text_label, color='red')
 
     ax.set_xlabel("Hemoliza (Hb g/L)")
     ax.set_ylabel(ylabel)
@@ -122,3 +123,35 @@ with col3:
 
 with col4:
     plot_index_with_ci_and_threshold(Hb, RQBHB, RQBHB_L, RQBHB_H, "RQUICKI-BHB", "RQUICKI-BHB")
+
+# =========================
+# Tabela korigovanih vrednosti indeksa za Hb 0–10 g/L
+# =========================
+st.subheader("Tabela: Originalne i korigovane vrednosti indeksa pri Hb = 0–10 g/L")
+
+# Hb koraci 0,1,...,10
+Hb_table = np.arange(0, 11, 1)
+
+table_data = {
+    "Hb (g/L)": Hb_table,
+    "HOMA-IR": [],
+    "QUICKI": [],
+    "RQUICKI": [],
+    "RQUICKI-BHB": []
+}
+
+for hb in Hb_table:
+    corr = {}
+    for p in measured:
+        a, b, R2 = regression[p].values()
+        bias = a * hb + b
+        corr[p] = measured[p] / (1 + bias / 100)
+
+    # Indeksi
+    table_data["HOMA-IR"].append((corr["INS"] * corr["GLU"]) / 22.5)
+    table_data["QUICKI"].append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"])))
+    table_data["RQUICKI"].append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"])))
+    table_data["RQUICKI-BHB"].append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"]) + np.log(corr["BHB"])))
+
+df_table = pd.DataFrame(table_data)
+st.dataframe(df_table.style.format("{:.3f}"))
