@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 
 st.set_page_config(layout="wide")
 st.title("Hemoliza i indeksi insulinske rezistencije (95% CI + prag nestabilnosti)")
@@ -26,7 +25,6 @@ measured = {
     "NEFA": st.sidebar.number_input("NEFA (mmol/L)", 0.1, 2.0, 0.6),
     "BHB": st.sidebar.number_input("BHB (mmol/L)", 0.1, 5.0, 0.4)
 }
-
 # Prag nestabilnosti (% promene indeksa u odnosu na Hb=0)
 tolerance = st.sidebar.slider("Prag nestabilnosti indeksa (%)", 1, 20, 5) / 100
 
@@ -52,11 +50,12 @@ for hb in Hb:
         SE = abs(bias) * np.sqrt(1 - R2)
         bias_L = bias - 1.96 * SE
         bias_H = bias + 1.96 * SE
-
+        # korekcija vrednosti
         corr[p] = measured[p] / (1 + bias / 100)
         corr_L[p] = measured[p] / (1 + bias_H / 100)
         corr_H[p] = measured[p] / (1 + bias_L / 100)
 
+    # Indeksi
     HOMA.append((corr["INS"] * corr["GLU"]) / 22.5)
     HOMA_L.append((corr_L["INS"] * corr_L["GLU"]) / 22.5)
     HOMA_H.append((corr_H["INS"] * corr_H["GLU"]) / 22.5)
@@ -74,21 +73,30 @@ for hb in Hb:
     RQBHB_H.append(1 / (np.log(corr_L["INS"]) + np.log(corr_L["GLU"]) + np.log(corr_L["NEFA"]) + np.log(corr_L["BHB"])))
 
 # =========================
-# Funkcija za crtanje grafova
+# Funkcija za crtanje grafova sa CI i pragom
 # =========================
 def plot_index_with_ci_and_threshold(x, y, yL, yH, title, ylabel):
     fig, ax = plt.subplots(figsize=(6,4))
     ax.plot(x, y, linewidth=2, label="Vrednost indeksa")
-    ax.fill_between(x, yL, yH, alpha=0.3, color="orange", label="95% CI")
+    ax.fill_between(x, yL, yH, alpha=0.3, color='orange', label="95% CI")
 
-    y0 = y[0]
+    # Prag nestabilnosti (relativna promena > tolerance)
+    y0 = y[0]  # vrednost indeksa pri Hb=0
     rel_change = np.abs(np.array(y) - y0) / y0
     above_tol = np.where(rel_change > tolerance)[0]
+
+    # =========================
+    # Crvena linija uvek u opsegu Hb 0–10 g/L
+    # =========================
     if len(above_tol) > 0:
         Hb_threshold = x[above_tol[0]]
-        ax.axvline(Hb_threshold, color="red", linestyle="--",
-                   label=f"Hb prag nestabilnosti = {Hb_threshold:.2f}")
-        ax.text(Hb_threshold + 0.2, max(y), f"Hb prag\n{Hb_threshold:.2f}", color="red")
+    else:
+        Hb_threshold = x[-1]  # kraj opsega, linija se i dalje crta
+
+    ax.axvline(Hb_threshold, color='red', linestyle='--', label=f"Hb prag nestabilnosti")
+    
+    # Opcionalno: označiti prag na vrhu linije
+    ax.text(Hb_threshold+0.2, max(y), f"Hb prag", color='red')
 
     ax.set_xlabel("Hemoliza (Hb g/L)")
     ax.set_ylabel(ylabel)
@@ -98,7 +106,7 @@ def plot_index_with_ci_and_threshold(x, y, yL, yH, title, ylabel):
     st.pyplot(fig)
 
 # =========================
-# Prikaz grafova
+# Prikaz 4 odvojenih grafova
 # =========================
 col1, col2 = st.columns(2)
 col3, col4 = st.columns(2)
@@ -114,38 +122,3 @@ with col3:
 
 with col4:
     plot_index_with_ci_and_threshold(Hb, RQBHB, RQBHB_L, RQBHB_H, "RQUICKI-BHB", "RQUICKI-BHB")
-
-# =========================
-# Tabela: izmereno vs. korigovano na Hb=0
-# =========================
-HOMA_0    = HOMA[0]
-QUICKI_0  = QUICKI[0]
-RQUICKI_0 = RQUICKI[0]
-RQBHB_0   = RQBHB[0]
-
-df = pd.DataFrame({
-    "Hb (g/L)": Hb,
-    "HOMA-IR (izmereno)": HOMA,
-    "HOMA-IR (korigovano na Hb=0)": [HOMA_0]*len(Hb),
-    "QUICKI (izmereno)": QUICKI,
-    "QUICKI (korigovano na Hb=0)": [QUICKI_0]*len(Hb),
-    "RQUICKI (izmereno)": RQUICKI,
-    "RQUICKI (korigovano na Hb=0)": [RQUICKI_0]*len(Hb),
-    "RQUICKI-BHB (izmereno)": RQBHB,
-    "RQUICKI-BHB (korigovano na Hb=0)": [RQBHB_0]*len(Hb)
-})
-
-st.subheader("Tabela: izmerene vrednosti indeksa i korigovane vrednosti pri Hb = 0")
-st.dataframe(
-    df.style.format({
-        "Hb (g/L)": "{:.2f}",
-        "HOMA-IR (izmereno)": "{:.3f}",
-        "HOMA-IR (korigovano na Hb=0)": "{:.3f}",
-        "QUICKI (izmereno)": "{:.4f}",
-        "QUICKI (korigovano na Hb=0)": "{:.4f}",
-        "RQUICKI (izmereno)": "{:.4f}",
-        "RQUICKI (korigovano na Hb=0)": "{:.4f}",
-        "RQUICKI-BHB (izmereno)": "{:.4f}",
-        "RQUICKI-BHB (korigovano na Hb=0)": "{:.4f}",
-    })
-)
