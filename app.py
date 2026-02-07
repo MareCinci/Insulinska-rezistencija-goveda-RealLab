@@ -19,7 +19,7 @@ regression = {
 # =========================
 # Sidebar – unos izmerenih vrednosti
 # =========================
-st.sidebar.header("Izmerene vrednosti (bez hemolize)")
+st.sidebar.header("Izmerene vrednosti")
 measured = {
     "GLU": st.sidebar.number_input("GLU (mmol/L)", 1.0, 20.0, 5.0),
     "INS": st.sidebar.number_input("INS (µIU/mL)", 1.0, 50.0, 10.0),
