@@ -1,122 +1,152 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
-st.set_page_config(layout="wide")
-st.title("Uticaj hemolize na indekse insulinske rezistencije (95% CI + prag Hb)")
+# =========================
+# Podešavanje stranice
+# =========================
+st.set_page_config(
+    page_title="Hemoliza i insulinska rezistencija",
+    layout="centered"
+)
+
+st.title("Uticaj hemolize na indekse insulinske rezistencije")
+
+st.markdown("""
+Aplikacija računa **indekse insulinske rezistencije**
+pre i posle korekcije hemolize i prikazuje njihov **bias (%) u funkciji Hb**.
+""")
 
 # =========================
-# Regresioni parametri
+# Regresioni modeli (% bias = a*Hb + b)
 # =========================
 regression = {
-    "GLU":  {"a": -2.9538, "b": -1.401,  "R2": 0.9794},
-    "NEFA": {"a":  9.8218, "b":  2.5353, "R2": 0.9972},
-    "BHB":  {"a":  5.3201, "b":  0.957,  "R2": 0.9913},
-    "INS":  {"a": -5.5017, "b": -3.7803,"R2": 0.9875}
+    "GLU":  {"a": -2.9538, "b": -1.401},
+    "NEFA": {"a":  9.8218, "b":  2.5353},
+    "BHB":  {"a":  5.3201, "b":  0.957},
+    "INS":  {"a": -5.5017, "b": -3.7803}
 }
 
 # =========================
-# Sidebar – izmerene vrednosti
+# Sidebar – unos
 # =========================
-st.sidebar.header("Izmerene vrednosti (bez hemolize)")
+st.sidebar.header("Unos izmerenih vrednosti")
 
+GLU_m = st.sidebar.number_input("GLU (mmol/L)", 2.0, 15.0, 5.0)
+INS_m = st.sidebar.number_input("INS (µIU/mL)", 1.0, 100.0, 10.0)
+NEFA_m = st.sidebar.number_input("NEFA (mmol/L)", 0.1, 3.0, 0.6)
+BHB_m = st.sidebar.number_input("BHB (mmol/L)", 0.05, 5.0, 0.4)
+
+Hb_input = st.sidebar.slider("Hb (g/L) – hemoliza uzorka", 0.0, 10.0, 1.0, 0.1)
+
+# =========================
+# Funkcije
+# =========================
+def correct_value(value, param, hb):
+    bias = regression[param]["a"] * hb + regression[param]["b"]
+    return value / (1 + bias / 100)
+
+def indices(vals):
+    HOMA = (vals["INS"] * vals["GLU"]) / 22.5
+    QUICKI = 1 / (np.log(vals["INS"]) + np.log(vals["GLU"]))
+    RQUICKI = 1 / (np.log(vals["INS"]) +
+                   np.log(vals["GLU"]) +
+                   np.log(vals["NEFA"]))
+    RQUICKI_BHB = 1 / (np.log(vals["INS"]) +
+                       np.log(vals["GLU"]) +
+                       np.log(vals["NEFA"]) +
+                       np.log(vals["BHB"]))
+    return HOMA, QUICKI, RQUICKI, RQUICKI_BHB
+
+# =========================
+# Izračun – jedna Hb vrednost
+# =========================
 measured = {
-    "GLU": st.sidebar.number_input("GLU (mmol/L)", 1.0, 20.0, 5.0),
-    "INS": st.sidebar.number_input("INS (µIU/mL)", 1.0, 50.0, 10.0),
-    "NEFA": st.sidebar.number_input("NEFA (mmol/L)", 0.1, 2.0, 0.6),
-    "BHB": st.sidebar.number_input("BHB (mmol/L)", 0.1, 5.0, 0.4)
+    "GLU": GLU_m,
+    "INS": INS_m,
+    "NEFA": NEFA_m,
+    "BHB": BHB_m
 }
 
-# =========================
-# Hb – hemoliza
-# =========================
-Hb = np.linspace(0, 10, 100)
+corrected = {
+    p: correct_value(v, p, Hb_input)
+    for p, v in measured.items()
+}
 
-HOMA, HOMA_L, HOMA_H = [], [], []
-QUICKI, QUICKI_L, QUICKI_H = [], [], []
-RQUICKI, RQUICKI_L, RQUICKI_H = [], [], []
-RQBHB, RQBHB_L, RQBHB_H = [], [], []
+idx_meas = indices(measured)
+idx_corr = indices(corrected)
 
-# =========================
-# Glavna petlja
-# =========================
-for hb in Hb:
+st.subheader("Indeksi insulinske rezistencije (Hb = {:.1f} g/L)".format(Hb_input))
 
-    corr, corr_L, corr_H = {}, {}, {}
+df_idx = pd.DataFrame({
+    "Indeks": ["HOMA-IR", "QUICKI", "RQUICKI", "RQUICKI-BHB"],
+    "Izmerena vrednost": idx_meas,
+    "Korigovana vrednost": idx_corr
+})
 
-    for p in measured:
-        a, b, R2 = regression[p].values()
-        bias = a * hb + b
-        SE = abs(bias) * np.sqrt(1 - R2)
-
-        bias_L = bias - 1.96 * SE
-        bias_H = bias + 1.96 * SE
-
-        corr[p]   = measured[p] / (1 + bias / 100)
-        corr_L[p] = measured[p] / (1 + bias_H / 100)
-        corr_H[p] = measured[p] / (1 + bias_L / 100)
-
-    # HOMA
-    HOMA.append((corr["INS"] * corr["GLU"]) / 22.5)
-    HOMA_L.append((corr_L["INS"] * corr_L["GLU"]) / 22.5)
-    HOMA_H.append((corr_H["INS"] * corr_H["GLU"]) / 22.5)
-
-    # QUICKI
-    QUICKI.append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"])))
-    QUICKI_L.append(1 / (np.log(corr_H["INS"]) + np.log(corr_H["GLU"])))
-    QUICKI_H.append(1 / (np.log(corr_L["INS"]) + np.log(corr_L["GLU"])))
-
-    # RQUICKI
-    RQUICKI.append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) + np.log(corr["NEFA"])))
-    RQUICKI_L.append(1 / (np.log(corr_H["INS"]) + np.log(corr_H["GLU"]) + np.log(corr_H["NEFA"])))
-    RQUICKI_H.append(1 / (np.log(corr_L["INS"]) + np.log(corr_L["GLU"]) + np.log(corr_L["NEFA"])))
-
-    # RQUICKI-BHB
-    RQBHB.append(1 / (np.log(corr["INS"]) + np.log(corr["GLU"]) +
-                      np.log(corr["NEFA"]) + np.log(corr["BHB"])))
-    RQBHB_L.append(1 / (np.log(corr_H["INS"]) + np.log(corr_H["GLU"]) +
-                        np.log(corr_H["NEFA"]) + np.log(corr_H["BHB"])))
-    RQBHB_H.append(1 / (np.log(corr_L["INS"]) + np.log(corr_L["GLU"]) +
-                        np.log(corr_L["NEFA"]) + np.log(corr_L["BHB"])))
+st.dataframe(df_idx, use_container_width=True)
 
 # =========================
-# Funkcija za graf
+# Bias indeksa vs Hb
 # =========================
-def plot_ci_with_threshold(x, y, yL, yH, title, ylabel, threshold_pct=0.1):
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.plot(x, y, linewidth=2, label="vrednost indeksa")
-    ax.fill_between(x, yL, yH, alpha=0.3, color='orange', label="95% CI")
+Hb_range = np.linspace(0, 10, 100)
+bias_results = []
 
-    # Prag Hb: kada CI > threshold% od indeksa
-    width = np.abs(np.array(yH) - np.array(yL))
-    rel_err = width / np.array(y)
-    above_threshold = np.where(rel_err > threshold_pct)[0]
-    if len(above_threshold) > 0:
-        Hb_threshold = x[above_threshold[0]]
-        ax.axvline(Hb_threshold, color='red', linestyle='--', label=f"Prag nepouzdanosti Hb={Hb_threshold:.2f}")
-        ax.text(Hb_threshold + 0.2, max(y), f"Hb prag\n{Hb_threshold:.2f}", color='red')
+for hb in Hb_range:
+    corr_vals = {p: correct_value(v, p, hb) for p, v in measured.items()}
+    idx_c = indices(corr_vals)
+    idx_m = idx_meas
 
-    ax.set_xlabel("Hemoliza (Hb g/L)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.grid(True)
-    ax.legend()
-    st.pyplot(fig)
+    bias_results.append([
+        hb,
+        100 * (idx_c[0] - idx_m[0]) / idx_m[0],
+        100 * (idx_c[1] - idx_m[1]) / idx_m[1],
+        100 * (idx_c[2] - idx_m[2]) / idx_m[2],
+        100 * (idx_c[3] - idx_m[3]) / idx_m[3]
+    ])
+
+df_bias = pd.DataFrame(
+    bias_results,
+    columns=["Hb", "HOMA bias", "QUICKI bias", "RQUICKI bias", "RQUICKI-BHB bias"]
+)
 
 # =========================
-# 4 ODVOJENA GRAFA
+# Grafikon 1 – bias indeksa
 # =========================
-c1, c2 = st.columns(2)
-c3, c4 = st.columns(2)
+st.subheader("Bias (%) indeksa insulinske rezistencije u funkciji Hb")
 
-with c1:
-    plot_ci_with_threshold(Hb, HOMA, HOMA_L, HOMA_H, "HOMA-IR (95% CI)", "HOMA-IR")
+fig1, ax1 = plt.subplots(figsize=(8,5))
+ax1.plot(df_bias["Hb"], df_bias["HOMA bias"], label="HOMA-IR")
+ax1.plot(df_bias["Hb"], df_bias["QUICKI bias"], label="QUICKI")
+ax1.plot(df_bias["Hb"], df_bias["RQUICKI bias"], label="RQUICKI")
+ax1.plot(df_bias["Hb"], df_bias["RQUICKI-BHB bias"], label="RQUICKI-BHB")
 
-with c2:
-    plot_ci_with_threshold(Hb, QUICKI, QUICKI_L, QUICKI_H, "QUICKI (95% CI)", "QUICKI")
+ax1.axvline(Hb_input, color="red", linestyle="--", label="Hb uzorka")
+ax1.set_xlabel("Hb (g/L)")
+ax1.set_ylabel("Bias (%)")
+ax1.legend()
+ax1.grid(True)
 
-with c3:
-    plot_ci_with_threshold(Hb, RQUICKI, RQUICKI_L, RQUICKI_H, "RQUICKI (95% CI)", "RQUICKI")
+st.pyplot(fig1)
 
-with c4:
-    plot_ci_with_threshold(Hb, RQBHB, RQBHB_L, RQBHB_H, "RQUICKI-BHB (95% CI)", "RQUICKI-BHB")
+# =========================
+# Grafikon 2 – RQUICKI posle korekcije
+# =========================
+rquicki_corr = []
+
+for hb in Hb_range:
+    vals = {p: correct_value(v, p, hb) for p, v in measured.items()}
+    rquicki_corr.append(indices(vals)[2])
+
+st.subheader("RQUICKI nakon korekcije hemolize")
+
+fig2, ax2 = plt.subplots(figsize=(8,5))
+ax2.plot(Hb_range, rquicki_corr, color="green")
+ax2.axvline(Hb_input, color="red", linestyle="--", label="Hb uzorka")
+ax2.set_xlabel("Hb (g/L)")
+ax2.set_ylabel("RQUICKI (korigovana vrednost)")
+ax2.legend()
+ax2.grid(True)
+
+st.pyplot(fig2)
