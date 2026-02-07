@@ -147,7 +147,7 @@ corrected_indices = correct_for_Hb(measured, selected_Hb)
 
 table_data = {
     "Indeks": ["HOMA-IR", "QUICKI", "RQUICKI", "RQUICKI-BHB"],
-    "Originalna vrednost (Hb=0)": [
+    "Izmerena vrednost": [
         (measured["INS"] * measured["GLU"]) / 22.5,
         1 / (np.log(measured["INS"]) + np.log(measured["GLU"])),
         1 / (np.log(measured["INS"]) + np.log(measured["GLU"]) + np.log(measured["NEFA"])),
