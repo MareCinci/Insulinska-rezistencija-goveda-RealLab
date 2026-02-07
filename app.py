@@ -137,7 +137,7 @@ def correct_for_Hb(values, Hb_value):
     return {"HOMA-IR": HOMA, "QUICKI": QUICKI, "RQUICKI": RQUICKI, "RQUICKI-BHB": RQBHB}
 
 # =========================
-# Prikaz tabele sa originalnim i korigovanim vrednostima
+# Tabela sa originalnim i korigovanim vrednostima
 # =========================
 st.subheader(f"Originalne i korigovane vrednosti indeksa pri Hb = {selected_Hb:.1f} g/L")
 corrected_indices = correct_for_Hb(measured, selected_Hb)
@@ -159,4 +159,4 @@ table_data = {
 }
 
 df_table = pd.DataFrame(table_data)
-st.dataframe(df_table.style.format("{:.3f}"))
+st.dataframe(df_table.round(3))  # zaokruži sve numeričke vrednosti na 3 decimale
