@@ -29,7 +29,7 @@ measured = {
 tolerance = st.sidebar.slider("Prag nestabilnosti indeksa (%)", 1, 20, 5) / 100
 
 # =========================
-# Odabir Hb za korekciju pojedinačne vrednosti
+# Odabir Hb za korekciju
 # =========================
 st.sidebar.header("Korekcija indeksa za odabrani Hb")
 selected_Hb = st.sidebar.slider("Odaberi Hb (g/L)", 0.0, 10.0, 0.0, 0.1)
@@ -97,13 +97,13 @@ def plot_index_with_ci_and_threshold(x, y, yL, yH, title, ylabel):
         text_label = f"Hb = {Hb_threshold:.2f} g/L"
     ax.text(Hb_threshold + 0.2, max(y), text_label, color='red')
 
-    # Prikaz odabrane Hb vrednosti
+    # Plava linija za odabrani Hb
     ax.axvline(selected_Hb, color='blue', linestyle='-.', label=f"Odabrani Hb = {selected_Hb:.1f}")
-    ax.legend()
     ax.set_xlabel("Hemoliza (Hb g/L)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(True)
+    ax.legend()
     st.pyplot(fig)
 
 # =========================
@@ -137,8 +137,26 @@ def correct_for_Hb(values, Hb_value):
     return {"HOMA-IR": HOMA, "QUICKI": QUICKI, "RQUICKI": RQUICKI, "RQUICKI-BHB": RQBHB}
 
 # =========================
-# Prikaz korekcije za odabrani Hb
+# Prikaz tabele sa originalnim i korigovanim vrednostima
 # =========================
-st.subheader(f"Korigovane vrednosti indeksa pri Hb = {selected_Hb:.1f} g/L")
+st.subheader(f"Originalne i korigovane vrednosti indeksa pri Hb = {selected_Hb:.1f} g/L")
 corrected_indices = correct_for_Hb(measured, selected_Hb)
-st.write(pd.DataFrame(corrected_indices, index=["Korigovana vrednost"]).T)
+
+table_data = {
+    "Indeks": ["HOMA-IR", "QUICKI", "RQUICKI", "RQUICKI-BHB"],
+    "Originalna vrednost (Hb=0)": [
+        (measured["INS"] * measured["GLU"]) / 22.5,
+        1 / (np.log(measured["INS"]) + np.log(measured["GLU"])),
+        1 / (np.log(measured["INS"]) + np.log(measured["GLU"]) + np.log(measured["NEFA"])),
+        1 / (np.log(measured["INS"]) + np.log(measured["GLU"]) + np.log(measured["NEFA"]) + np.log(measured["BHB"]))
+    ],
+    f"Korigovana vrednost (Hb={selected_Hb:.1f})": [
+        corrected_indices["HOMA-IR"],
+        corrected_indices["QUICKI"],
+        corrected_indices["RQUICKI"],
+        corrected_indices["RQUICKI-BHB"]
+    ]
+}
+
+df_table = pd.DataFrame(table_data)
+st.dataframe(df_table.style.format("{:.3f}"))
